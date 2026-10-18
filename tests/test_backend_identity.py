@@ -417,3 +417,64 @@ async def test_strata_is_identified_whichever_metrics_format_it_serves(monkeypat
     assert context.engine_version == "0.1.40.3"
     assert context.max_model_len == 32768
     assert context.slot_count == 2
+
+
+# TandemLLM 0.11.4 as it answers without a key: its own model first, then a relay
+# backend under another owner, the same Server header on every response, and a
+# /metrics that wants a bearer token. Trimmed to the fields the probes read.
+TANDEMLLM_SERVER = {"server": "TandemLLM Python/3.11.16"}
+TANDEMLLM_MODELS = {
+    "object": "list",
+    "data": [
+        {"id": "TandemLLM", "object": "model", "owned_by": "tandemllm"},
+        {"id": "deepseek-flash", "object": "model", "owned_by": "deepseek"},
+    ],
+}
+TANDEMLLM_HEALTH = {"status": "ok", "model": "TandemLLM", "version": "0.11.4+exl3-6.0"}
+
+
+def _tandemllm(models=TANDEMLLM_MODELS, headers=TANDEMLLM_SERVER):
+    def respond(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/metrics":
+            return httpx.Response(401, headers=headers)
+        body = {"/v1/models": models, "/health": TANDEMLLM_HEALTH}.get(path)
+        return httpx.Response(200 if body else 404, json=body or {}, headers=headers)
+
+    return respond
+
+
+async def test_tandemllm_is_identified_by_owner_and_reports_its_version(monkeypatch):
+    _install(monkeypatch, _tandemllm())
+    assert await metadata.probe_backend_hint("http://test/v1") == ("tandemllm", "TandemLLM")
+    info = await metadata._probe_engine("http://test/v1", None, "unknown", model="TandemLLM")
+    assert info["engine_name"] == "TandemLLM"
+    assert info["engine_version"] == "0.11.4+exl3-6.0"
+    assert info["server_model_id"] == "TandemLLM"
+
+
+async def test_tandemllm_server_header_identifies_it_behind_a_relay_listed_first(monkeypatch):
+    relay_first = {"data": list(reversed(TANDEMLLM_MODELS["data"]))}
+    _install(monkeypatch, _tandemllm(models=relay_first))
+    assert await metadata.probe_backend_hint("http://test") == ("tandemllm", "TandemLLM")
+    info = await metadata._probe_engine("http://test", None, "unknown")
+    assert info["engine_name"] == "TandemLLM"
+    assert info["engine_version"] == "0.11.4+exl3-6.0"
+
+
+async def test_explicit_tandemllm_label_is_trusted(monkeypatch):
+    # A proxy that rewrites the owner and drops the Server header hides identity.
+    anonymous = {"data": [{"id": "TandemLLM", "object": "model"}]}
+    _install(monkeypatch, _tandemllm(models=anonymous, headers={}))
+    assert await metadata.probe_backend_hint("http://test") is None
+    info = await metadata._probe_engine("http://test", None, "tandemllm")
+    assert info["engine_name"] == "TandemLLM"
+    assert info["engine_version"] == "0.11.4+exl3-6.0"
+    service = BenchmarkService(repo=None, reporter=None)
+    assert isinstance(service._adapter_for("tandemllm"), OpenAICompatibleAdapter)
+
+
+@pytest.mark.parametrize("server", ["Tandem", "TandemLLM-proxy", "uvicorn TandemLLM"])
+def test_near_miss_server_headers_do_not_identify_tandemllm(server):
+    response = httpx.Response(200, json={"data": []}, headers={"server": server})
+    assert detect_backend_from_response(response, 8000) == ("unknown", "inference server")

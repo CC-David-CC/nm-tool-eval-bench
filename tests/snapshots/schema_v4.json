@@ -26,6 +26,7 @@
         "halogen",
         "strata",
         "tabbyapi",
+        "tandemllm",
         "unknown"
       ],
       "default": "unknown",

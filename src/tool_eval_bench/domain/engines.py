@@ -159,6 +159,11 @@ TABBYAPI = EngineProfile(
     display_name="TabbyAPI",
     declared_names=(("owned_by", "tabbyapi"), ("software", "tabbyapi")),
 )
+TANDEMLLM = EngineProfile(
+    key="tandemllm",
+    display_name="TandemLLM",
+    declared_names=(("owned_by", "tandemllm"), ("server", "tandemllm")),
+)
 
 # Public label order, as the argument schema lists it.
 ENGINE_PROFILES: tuple[EngineProfile, ...] = (
@@ -174,6 +179,7 @@ ENGINE_PROFILES: tuple[EngineProfile, ...] = (
     HALOGEN,
     STRATA,
     TABBYAPI,
+    TANDEMLLM,
 )
 
 # Which engine a /metrics scrape belongs to when several namespaces appear.

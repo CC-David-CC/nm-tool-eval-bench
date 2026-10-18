@@ -118,6 +118,7 @@ def test_metrics_namespace_identity(text: str, expected: tuple[str, str] | None)
         ("owned_by", "ninfer", ("ninfer", "NInfer")),
         ("owned_by", "sglang", ("sglang", "SGLang")),
         ("owned_by", "tabbyapi", ("tabbyapi", "TabbyAPI")),
+        ("owned_by", "tandemllm", ("tandemllm", "TandemLLM")),
         ("owned_by", "TensorFold 1.2", ("tensorfold", "TensorFold")),
         ("owned_by", "vllm", None),
         ("owned_by", "strata", None),
@@ -125,6 +126,8 @@ def test_metrics_namespace_identity(text: str, expected: tuple[str, str] | None)
         ("server", "vLLM/0.9.1", ("vllm", "vLLM")),
         ("server", "sglang", ("sglang", "SGLang")),
         ("server", "LiteLLM", ("litellm", "LiteLLM")),
+        ("server", "TandemLLM Python/3.11.16", ("tandemllm", "TandemLLM")),
+        ("server", "tandem", None),
         ("server", "uvicorn", None),
         ("server", "strata", None),
         ("service", "Strata 0.1.40", ("strata", "Strata")),
@@ -232,6 +235,7 @@ _ENGINE_CASES: list[tuple[str, dict[str, httpx.Response], str | None, list[str]]
     ("tensorfold", {}, "TensorFold", ["/v1/models", "/health"]),
     ("strata", {}, "Strata", ["/v1/models", "/props", "/health"]),
     ("tabbyapi", {}, "TabbyAPI", ["/v1/models", "/v1/model", "/props"]),
+    ("tandemllm", {}, "TandemLLM", ["/v1/models", "/health"]),
     ("halogen", {}, "Halogen Flash", ["/v1/models"]),
     ("sglang", {}, "SGLang", ["/v1/models"]),
     (
@@ -616,6 +620,7 @@ def _run_context(engine_name: str | None, window: int | None = 81920) -> RunCont
         ("SGLang", None),
         ("TensorFold", None),
         ("TabbyAPI", None),
+        ("TandemLLM", None),
         ("Halogen Flash", None),
         ("LiteLLM", None),
         ("NInfer", None),
@@ -654,6 +659,7 @@ _BACKEND_CHOICES = [
     "halogen",
     "strata",
     "tabbyapi",
+    "tandemllm",
     "unknown",
 ]
 
@@ -680,5 +686,5 @@ def test_unsupported_backend_message() -> None:
     assert str(excinfo.value) == (
         "Unsupported backend: Bogus. "
         "Supported: vllm, litellm, llamacpp, sglang, gemini, openai, anthropic, "
-        "ninfer, tensorfold, halogen, strata, tabbyapi, unknown"
+        "ninfer, tensorfold, halogen, strata, tabbyapi, tandemllm, unknown"
     )

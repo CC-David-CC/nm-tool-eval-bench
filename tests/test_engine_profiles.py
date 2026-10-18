@@ -92,6 +92,7 @@ _FACTS = {
     "halogen": (False, False, None, False),
     "strata": (True, False, "mtp", True),
     "tabbyapi": (False, False, None, False),
+    "tandemllm": (False, False, None, False),
 }
 
 

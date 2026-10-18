@@ -13,6 +13,7 @@ needs no chat endpoint; see [decision-models.md](decision-models.md).
 - **Strata** — OpenAI-compatible model server, identified by its declared health service or build information
 - **TabbyAPI** — OpenAI-compatible server, identified by its model owner or `/.well-known/serviceinfo`
 - **NInfer** — OpenAI-compatible inference engine, detected via `/v1/models`
+- **TandemLLM** — OpenAI-compatible engine, identified by its model owner or `Server` header
 - **TensorFold** serves MLX and CUDA models through the existing OpenAI adapter;
   detected by `owned_by: "tensorfold"` or the `tensorfold:` metrics namespace
 - **Gemini** — supported through its native API as well as its OpenAI-compatible
@@ -198,6 +199,53 @@ authentication disabled, that list is the whole model directory, and dummy model
 aliases come first when they are enabled. With TabbyAPI's inline model loading
 enabled, a request for a different model loads that model mid-run, and the recorded
 ID and capacity still describe the one loaded at the start.
+
+## TandemLLM
+
+```bash
+# The plain engine, without the conductor; use it for benchmark runs:
+tool-eval-bench run --short --base-url http://127.0.0.1:8000/v1 --model TandemLLM --header X-Tandem=raw --seed 42
+# The default path, with the conductor in front of the model, for comparison:
+tool-eval-bench run --short --base-url http://127.0.0.1:8000/v1 --model TandemLLM --seed 42
+# Pin the reporting label when a proxy hides identification endpoints:
+tool-eval-bench run --backend tandemllm --base-url http://127.0.0.1:8000/v1 --model TandemLLM --header X-Tandem=raw --seed 42
+```
+
+[TandemLLM](https://github.com/0xBakeer/TandemLLM) serves one model, `TandemLLM`,
+through the existing OpenAI-compatible adapter. Automatic detection recognizes
+`owned_by: "tandemllm"` in `/v1/models` or a `Server` header that starts with
+`TandemLLM`, for example `TandemLLM Python/3.11.16`. Relay backends configured on the
+server appear in the same list under their own owners, such as `deepseek`, so pass
+`--model TandemLLM` to skip the model prompt. The probe records the engine version
+from `version` in `/health`, which answers without a key, for example
+`0.11.4+exl3-6.0`. The model listing declares no top-level context window, so context
+pressure and the needle benchmark need `--context-size`.
+
+By default a [conductor](https://github.com/0xBakeer/TandemLLM/blob/main/docs/server.md#tandemllm-and-the-conductor)
+runs in front of the model. It classifies each turn, adds its own notes to the
+prompt, such as writing templates and memory notes, and sets the thinking effort.
+That shapes answers and can turn a tool task into a written draft. The
+`X-Tandem: raw` header, sent with `--header X-Tandem=raw`, serves the plain path:
+no turn class, no notes, no effort change. Use it for benchmark runs. Run the
+default path, without the header, only when the conductor itself is under test; the
+two runs then differ in the conductor alone, and its decision journal on the server
+shows what it added to each turn.
+
+Thinking is on by default and the model decides its length. `--no-think` sends
+`enable_thinking: false`, which TandemLLM honours as thinking off. An effort word,
+`--backend-kwargs '{"reasoning_effort": "low"}'` from `low` to `xhigh`, caps the
+reasoning, and a token count in `{"reasoning": {"max_tokens": N}}` wins over a word.
+The accepted fields and their precedence are listed under
+[Thinking budgets from the client](https://github.com/0xBakeer/TandemLLM/blob/main/docs/server.md#thinking-budgets-from-the-client).
+
+The first request of each scenario pays the full prefill of the tool prompt, about
+4,400 tokens; on a DGX Spark the first token arrives after about 7 s, and that turn's
+latency counts toward responsiveness. Later turns of the same scenario reuse the
+prefix.
+
+`/metrics` needs a bearer token and uses TandemLLM's own metric names, none of which
+the speculative-decoding detection reads, so spec-bench and spec-live report no
+speculative-decoding counters.
 
 ## TensorFold
 

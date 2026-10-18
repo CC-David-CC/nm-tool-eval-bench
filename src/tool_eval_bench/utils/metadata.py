@@ -33,6 +33,7 @@ from tool_eval_bench.domain.engines import (
     SGLANG,
     STRATA,
     TABBYAPI,
+    TANDEMLLM,
     TENSORFOLD,
     VLLM,
     IdentitySource,
@@ -811,6 +812,23 @@ async def _probe_tabbyapi(
     return result
 
 
+async def _probe_tandemllm(
+    base_url: str, api_key: str | None, *, session: _ProbeSession
+) -> dict[str, Any]:
+    """Read TandemLLM's version from ``/health``, which answers without a key."""
+    result: dict[str, Any] = {"engine_name": TANDEMLLM.display_name}
+    health = await _probe_json(
+        session,
+        f"{_root_url(base_url)}/health",
+        headers=_auth_headers(api_key),
+        what="TandemLLM /health",
+    )
+    version = health.get("version") if health else None
+    if isinstance(version, str) and version.strip():
+        result["engine_version"] = version.strip()
+    return result
+
+
 async def _identify_unlabelled(
     base_url: str, api_key: str | None, *, session: _ProbeSession
 ) -> tuple[str, str | None]:
@@ -872,6 +890,8 @@ async def _probe_engine(
             result.update(await _probe_strata(base_url, api_key, session=active))
         elif key == TABBYAPI.key:
             result.update(await _probe_tabbyapi(base_url, api_key, session=active))
+        elif key == TANDEMLLM.key:
+            result.update(await _probe_tandemllm(base_url, api_key, session=active))
         elif key == LLAMACPP.key:
             props = await _probe_props(base_url, api_key, session=active)
             # A GGUF file type cannot tell UD-Q4_K_XL or Q4_K_L from Q4_K_M, so
